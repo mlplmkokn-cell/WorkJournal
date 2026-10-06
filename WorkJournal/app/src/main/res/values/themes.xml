@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Базовая тема — используется только для запуска приложения.
+         Сам интерфейс рисуется через Jetpack Compose. -->
+    <style name="Theme.WorkJournal" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#1a3a2a</item>
+        <item name="android:navigationBarColor">#ffffff</item>
+    </style>
+</resources>
