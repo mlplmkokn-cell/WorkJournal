@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -47,7 +48,7 @@ import com.workjournal.ui.theme.Green900
  * - Исходную подпись
  * - Описание
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DetailScreen(
     recordId: Long,
@@ -290,6 +291,7 @@ private fun RecordContent(
 /**
  * Горизонтальная листалка фотографий.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PhotoGallery(photos: List<String>) {
     val pagerState = rememberPagerState { photos.size }
