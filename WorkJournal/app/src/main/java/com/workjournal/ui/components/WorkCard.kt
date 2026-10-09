@@ -62,7 +62,7 @@ fun WorkCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = record.category.emoji,
+                        text = record.categoryEmoji,
                         fontSize = 36.sp
                     )
                 }
@@ -162,7 +162,7 @@ fun WorkCardCompact(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    Text(text = record.category.emoji, fontSize = 28.sp)
+                    Text(text = record.categoryEmoji, fontSize = 28.sp)
                 }
             }
 

@@ -170,7 +170,7 @@ private fun RecordContent(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                Text(record.category.emoji, fontSize = 64.sp)
+                Text(record.categoryEmoji, fontSize = 64.sp)
             }
         }
 
@@ -214,7 +214,7 @@ private fun RecordContent(
                     color = Green100
                 ) {
                     Text(
-                        text = record.category.emoji,
+                        text = record.categoryEmoji,
                         modifier = Modifier.padding(8.dp),
                         fontSize = 24.sp
                     )
@@ -243,7 +243,7 @@ private fun RecordContent(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetaCard(
                     label = "Категория",
-                    value = record.category.displayName,
+                    value = record.categoryName,
                     modifier = Modifier.weight(1f)
                 )
                 MetaCard(
