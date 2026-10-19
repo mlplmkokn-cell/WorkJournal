@@ -236,7 +236,9 @@ private fun ChatInput(
             FilledIconButton(
                 onClick = onSend,
                 enabled = enabled && text.isNotBlank(),
-                containerColor = Green700,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Green700
+                ),
                 modifier = Modifier.size(48.dp)
             ) {
                 Icon(Icons.Default.Send, contentDescription = "Отправить", tint = Color.White)
