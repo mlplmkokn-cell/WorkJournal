@@ -1,7 +1,6 @@
 package com.workjournal.ui.screens
 
 import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -44,13 +44,16 @@ fun AddWorkScreen(
     onBack: () -> Unit,
     viewModel: AddWorkViewModel = hiltViewModel()
 ) {
-    val state   = viewModel.uiState.collectAsState().value
+    val state = viewModel.uiState.collectAsState().value
     val context = LocalContext.current
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var newCategoryName by remember { mutableStateOf("") }
+    var newCategoryEmoji by remember { mutableStateOf("") }
 
     LaunchedEffect(state.isSaved) { if (state.isSaved) onSaved() }
 
     val cameraPermission = rememberPermissionState(android.Manifest.permission.CAMERA)
-    var tempPhotoUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         if (ok) tempPhotoUri?.let { viewModel.addPhotoFromUri(it) }
@@ -67,6 +70,59 @@ fun AddWorkScreen(
                 cameraLauncher.launch(uri)
             }
         } else cameraPermission.launchPermissionRequest()
+    }
+
+    // Диалог добавления новой категории
+    if (showAddCategoryDialog) {
+        Dialog(onDismissRequest = { showAddCategoryDialog = false }) {
+            Card(shape = RoundedCornerShape(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Новая категория", fontWeight = FontWeight.Medium, fontSize = 18.sp)
+                    OutlinedTextField(
+                        value = newCategoryEmoji,
+                        onValueChange = { newCategoryEmoji = it.take(2) },
+                        label = { Text("Эмодзи (необязательно)") },
+                        placeholder = { Text("🔧") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    OutlinedTextField(
+                        value = newCategoryName,
+                        onValueChange = { newCategoryName = it },
+                        label = { Text("Название *") },
+                        placeholder = { Text("Например: Покраска заборов") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { showAddCategoryDialog = false },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Отмена") }
+                        Button(
+                            onClick = {
+                                if (newCategoryName.isNotBlank()) {
+                                    viewModel.addNewCategory(
+                                        newCategoryName.trim(),
+                                        newCategoryEmoji.trim().ifBlank { "🔧" }
+                                    )
+                                    newCategoryName = ""
+                                    newCategoryEmoji = ""
+                                    showAddCategoryDialog = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Green700),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Добавить") }
+                    }
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -92,14 +148,24 @@ fun AddWorkScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+
             // ---- ФОТО ----
-            SectionLabel("Фотографии")
+            Text("Фотографии", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { openCamera() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) {
+                OutlinedButton(
+                    onClick = { openCamera() },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
                     Icon(Icons.Default.CameraAlt, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp)); Text("Камера")
                 }
-                OutlinedButton(onClick = { galleryLauncher.launch("image/*") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) {
+                OutlinedButton(
+                    onClick = { galleryLauncher.launch("image/*") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
                     Icon(Icons.Default.PhotoLibrary, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp)); Text("Галерея")
                 }
@@ -109,8 +175,7 @@ fun AddWorkScreen(
                     items(state.photoPaths) { path ->
                         Box {
                             AsyncImage(
-                                model = path,
-                                contentDescription = null,
+                                model = path, contentDescription = null,
                                 modifier = Modifier.size(90.dp).clip(RoundedCornerShape(8.dp))
                                     .border(0.5.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
                                 contentScale = ContentScale.Crop
@@ -128,44 +193,100 @@ fun AddWorkScreen(
             }
 
             // ---- КАТЕГОРИЯ ----
-            SectionLabel("Категория")
-            if (state.availableCategories.isEmpty()) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Green700)
-            } else {
-                CategoryChips(
-                    categories = state.availableCategories,
-                    selected   = state.selectedCategory,
-                    onSelect   = { viewModel.onCategorySelected(it) }
-                )
-            }
+            Text("Категория", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-            // ---- ПОДПИСЬ ----
-            SectionLabel("Подпись")
-            OutlinedTextField(
-                value = state.caption,
-                onValueChange = { viewModel.onCaptionChanged(it) },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Замена качели, Тевосяна 22а — поменяли сиденье", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                minLines = 2, maxLines = 5,
-                shape = RoundedCornerShape(10.dp)
-            )
-            // Результат разбора
-            if (!state.parsedWorkType.isNullOrBlank() || !state.parsedAddress.isNullOrBlank()) {
-                Card(colors = CardDefaults.cardColors(containerColor = Green100), shape = RoundedCornerShape(10.dp)) {
-                    Column(Modifier.padding(10.dp)) {
-                        Text("✨ Распознано:", style = MaterialTheme.typography.labelSmall, color = Green800, fontWeight = FontWeight.Medium)
-                        Spacer(Modifier.height(4.dp))
-                        if (!state.parsedWorkType.isNullOrBlank()) ParsedRow("Тип", state.parsedWorkType)
-                        if (!state.parsedAddress.isNullOrBlank())  ParsedRow("Адрес", state.parsedAddress)
-                        if (!state.parsedDescription.isNullOrBlank()) ParsedRow("Описание", state.parsedDescription)
+            // Чипы существующих категорий + кнопка +
+            if (state.availableCategories.isEmpty()) {
+                // Нет категорий — только кнопка добавить
+                OutlinedButton(
+                    onClick = { showAddCategoryDialog = true },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Добавить категорию")
+                }
+            } else {
+                // Показываем существующие + кнопку +
+                val rows = (state.availableCategories + null).chunked(3)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    rows.forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.forEach { cat ->
+                                if (cat == null) {
+                                    // Кнопка добавить новую
+                                    OutlinedButton(
+                                        onClick = { showAddCategoryDialog = true },
+                                        shape = RoundedCornerShape(20.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, null, modifier = Modifier.size(14.dp))
+                                        Spacer(Modifier.width(2.dp))
+                                        Text("Добавить", fontSize = 12.sp)
+                                    }
+                                } else {
+                                    FilterChip(
+                                        selected = cat.id == state.selectedCategory?.id,
+                                        onClick = { viewModel.onCategorySelected(cat) },
+                                        label = { Text("${cat.emoji} ${cat.name}", fontSize = 12.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Green100,
+                                            selectedLabelColor = Green800
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            // ---- ДАТА / ВРЕМЯ ----
-            DateTimeSection(selectedDate = state.selectedDate, onDateChanged = { viewModel.onDateChanged(it) }, context = context)
+            // ---- ПОДПИСЬ ----
+            Text("Подпись", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(
+                value = state.caption,
+                onValueChange = { viewModel.onCaptionChanged(it) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Замена качели, Тевосяна 22а — поменяли сиденье",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                minLines = 2, maxLines = 5,
+                shape = RoundedCornerShape(10.dp)
+            )
+            if (!state.parsedWorkType.isNullOrBlank() || !state.parsedAddress.isNullOrBlank()) {
+                Card(colors = CardDefaults.cardColors(containerColor = Green100), shape = RoundedCornerShape(10.dp)) {
+                    Column(Modifier.padding(10.dp)) {
+                        Text("✨ Распознано:", style = MaterialTheme.typography.labelSmall,
+                            color = Green800, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(4.dp))
+                        if (!state.parsedWorkType.isNullOrBlank()) ParsedRow("Тип", state.parsedWorkType)
+                        if (!state.parsedAddress.isNullOrBlank()) ParsedRow("Адрес", state.parsedAddress)
+                    }
+                }
+            }
 
-            // ---- КНОПКА ----
+            // ---- ДАТА (без времени) ----
+            Text("Дата", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val cal = Calendar.getInstance().apply { timeInMillis = state.selectedDate }
+            val dateFmt = SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
+            OutlinedButton(
+                onClick = {
+                    DatePickerDialog(context, { _, y, m, d ->
+                        cal.set(y, m, d)
+                        viewModel.onDateChanged(cal.timeInMillis)
+                    }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(dateFmt.format(Date(state.selectedDate)), fontSize = 15.sp)
+            }
+
+            // ---- СОХРАНИТЬ ----
             Button(
                 onClick = { viewModel.saveRecord() },
                 modifier = Modifier.fillMaxWidth(),
@@ -194,80 +315,11 @@ fun AddWorkScreen(
 }
 
 @Composable
-private fun SectionLabel(text: String) =
-    Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-@Composable
-private fun CategoryChips(
-    categories: List<WorkCategory>,
-    selected: WorkCategory?,
-    onSelect: (WorkCategory) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        categories.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { cat ->
-                    FilterChip(
-                        selected = cat.id == selected?.id,
-                        onClick = { onSelect(cat) },
-                        label = { Text("${cat.emoji} ${cat.name}", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Green100,
-                            selectedLabelColor = Green800
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ParsedRow(label: String, value: String) {
     Row(Modifier.padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(64.dp))
-        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = Green800, modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun DateTimeSection(selectedDate: Long, onDateChanged: (Long) -> Unit, context: android.content.Context) {
-    val cal    = Calendar.getInstance().apply { timeInMillis = selectedDate }
-    val dateFmt = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-    val timeFmt = SimpleDateFormat("HH:mm",      Locale.getDefault())
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Дата и время", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Surface(shape = RoundedCornerShape(4.dp), color = Green700) {
-                Text("Авто", Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = {
-                    DatePickerDialog(context, { _, y, m, d ->
-                        cal.set(y, m, d); onDateChanged(cal.timeInMillis)
-                    }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-                },
-                modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(dateFmt.format(Date(selectedDate)))
-            }
-            OutlinedButton(
-                onClick = {
-                    TimePickerDialog(context, { _, h, min ->
-                        cal.set(Calendar.HOUR_OF_DAY, h); cal.set(Calendar.MINUTE, min); onDateChanged(cal.timeInMillis)
-                    }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
-                },
-                modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Icons.Default.AccessTime, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(timeFmt.format(Date(selectedDate)))
-            }
-        }
+        Text(label, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(64.dp))
+        Text(value, style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium, color = Green800, modifier = Modifier.weight(1f))
     }
 }

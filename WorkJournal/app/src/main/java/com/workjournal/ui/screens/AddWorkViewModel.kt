@@ -45,13 +45,12 @@ class AddWorkViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     init {
-        // Загружаем категории из БД
         viewModelScope.launch {
             repository.getAllCategories().collect { cats ->
                 _uiState.update { s ->
                     s.copy(
                         availableCategories = cats,
-                        selectedCategory = s.selectedCategory ?: cats.find { it.name == "Прочее" } ?: cats.firstOrNull()
+                        selectedCategory = s.selectedCategory ?: cats.firstOrNull()
                     )
                 }
             }
@@ -63,16 +62,10 @@ class AddWorkViewModel @Inject constructor(
         if (caption.length > 5) {
             val parsed = CaptionParser.parse(caption)
             _uiState.update { s ->
-                // Автопредложение категории если ещё не выбрана вручную
-                val autoCategory = s.availableCategories.find {
-                    it.name.lowercase().contains(parsed.suggestedCategoryKeyword)
-                }
                 s.copy(
-                    parsedWorkType   = parsed.workType,
-                    parsedAddress    = parsed.address,
-                    parsedDescription = parsed.description,
-                    selectedCategory = if (s.selectedCategory?.name == "Прочее" && autoCategory != null)
-                        autoCategory else s.selectedCategory
+                    parsedWorkType = parsed.workType,
+                    parsedAddress = parsed.address,
+                    parsedDescription = parsed.description
                 )
             }
         }
@@ -84,6 +77,16 @@ class AddWorkViewModel @Inject constructor(
 
     fun onDateChanged(date: Long) {
         _uiState.update { it.copy(selectedDate = date) }
+    }
+
+    // Добавить новую категорию прямо с экрана добавления работы
+    fun addNewCategory(name: String, emoji: String) {
+        viewModelScope.launch {
+            repository.addCategory(name, emoji)
+            // Автоматически выбираем только что добавленную
+            val cats = repository.getAllCategories()
+            // selectedCategory обновится через Flow в init
+        }
     }
 
     fun addPhotoFromUri(uri: Uri) {
@@ -122,7 +125,7 @@ class AddWorkViewModel @Inject constructor(
                     workType      = state.parsedWorkType,
                     address       = state.parsedAddress,
                     description   = state.parsedDescription,
-                    categoryName  = cat?.name  ?: "Прочее",
+                    categoryName  = cat?.name  ?: "",
                     categoryEmoji = cat?.emoji ?: "🔧",
                     photos = state.photoPaths.map { path ->
                         PhotoRecord(recordId = 0, filePath = path, thumbnailPath = null, takenAt = now)
@@ -138,24 +141,28 @@ class AddWorkViewModel @Inject constructor(
 
     fun createTempPhotoFile(): File? = try {
         val dir = File(context.filesDir, "Pictures").also { it.mkdirs() }
-        val ts  = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         File(dir, "PHOTO_$ts.jpg")
     } catch (e: Exception) { null }
 
     private fun savePhotoFromUri(uri: Uri): String? {
         val dir = File(context.filesDir, "Pictures").also { it.mkdirs() }
-        val ts  = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val dest = File(dir, "PHOTO_$ts.jpg")
 
         context.contentResolver.openInputStream(uri)?.use { input ->
             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeStream(input, null, opts)
             context.contentResolver.openInputStream(uri)?.use { input2 ->
-                val scale   = calcSampleSize(opts.outWidth, opts.outHeight, 2048, 2048)
-                val bmpOpts = BitmapFactory.Options().apply { inSampleSize = scale }
-                val bmp     = BitmapFactory.decodeStream(input2, null, bmpOpts)
+                // Сжимаем до 1920px по длинной стороне — хорошее качество, меньше места
+                val scale = calcSampleSize(opts.outWidth, opts.outHeight, 1920, 1920)
+                val bmp = BitmapFactory.decodeStream(input2, null,
+                    BitmapFactory.Options().apply { inSampleSize = scale })
                 bmp?.let {
-                    FileOutputStream(dest).use { out -> it.compress(Bitmap.CompressFormat.JPEG, 90, out) }
+                    FileOutputStream(dest).use { out ->
+                        // 85% качества JPEG — визуально почти не отличить от оригинала
+                        it.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                    }
                     it.recycle()
                 }
             }
@@ -165,9 +172,7 @@ class AddWorkViewModel @Inject constructor(
 
     private fun calcSampleSize(w: Int, h: Int, maxW: Int, maxH: Int): Int {
         var s = 1
-        if (h > maxH || w > maxW) {
-            while ((h / 2 / s) >= maxH && (w / 2 / s) >= maxW) s *= 2
-        }
+        while ((h / 2 / s) >= maxH && (w / 2 / s) >= maxW) s *= 2
         return s
     }
 
