@@ -11,10 +11,9 @@ import androidx.room.RoomDatabase
         CustomFieldEntity::class,
         FieldTemplateEntity::class
     ],
-    version = 3,   // Увеличиваем версию — добавили custom_fields и field_templates
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workJournalDao(): WorkJournalDao
-}
 }
