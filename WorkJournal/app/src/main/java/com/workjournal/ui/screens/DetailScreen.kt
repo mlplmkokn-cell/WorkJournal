@@ -6,7 +6,10 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -22,18 +25,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.workjournal.domain.model.WorkRecord
 import com.workjournal.ui.components.formatDate
 import com.workjournal.ui.theme.*
-import androidx.compose.foundation.ExperimentalFoundationApi
 import java.io.File
 import java.io.FileInputStream
 
@@ -70,10 +76,8 @@ fun DetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = if (state.record != null) "Запись #${state.record!!.id}" else "Загрузка...",
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(if (state.record != null) "Запись #${state.record!!.id}" else "Загрузка...",
+                        fontWeight = FontWeight.Medium)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Назад") }
@@ -84,8 +88,7 @@ fun DetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Green900,
-                    titleContentColor = Color.White,
+                    containerColor = Green900, titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
             )
@@ -110,11 +113,24 @@ fun DetailScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RecordContent(record: WorkRecord, modifier: Modifier, context: Context) {
+    // Полноэкранный просмотр фото
+    var fullscreenPhotoIndex by remember { mutableStateOf<Int?>(null) }
+    val photos = record.photos.map { it.filePath }
+
+    // Полноэкранный диалог с зумом
+    fullscreenPhotoIndex?.let { startIndex ->
+        FullscreenPhotoViewer(
+            photos = photos,
+            startIndex = startIndex,
+            onDismiss = { fullscreenPhotoIndex = null },
+            context = context
+        )
+    }
+
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
 
-        // ===== ГАЛЕРЕЯ ФОТО =====
-        if (record.photos.isNotEmpty()) {
-            val photos = record.photos.map { it.filePath }
+        // ===== ГАЛЕРЕЯ =====
+        if (photos.isNotEmpty()) {
             val pagerState = rememberPagerState { photos.size }
 
             Box {
@@ -122,22 +138,32 @@ private fun RecordContent(record: WorkRecord, modifier: Modifier, context: Conte
                     state = pagerState,
                     modifier = Modifier.fillMaxWidth().height(260.dp)
                 ) { page ->
-                    AsyncImage(
-                        model = photos[page],
-                        contentDescription = "Фото ${page + 1}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    // Нажатие на фото → полный экран
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = photos[page],
+                            contentDescription = "Фото ${page + 1}",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { _, _, _, _ -> }
+                                },
+                            contentScale = ContentScale.Crop
+                        )
+                        // Невидимая кнопка на весь экран для открытия полного просмотра
+                        Surface(
+                            onClick = { fullscreenPhotoIndex = page },
+                            modifier = Modifier.fillMaxSize(),
+                            color = Color.Transparent
+                        ) {}
+                    }
                 }
 
-                // Кнопки сохранить текущее / все фото
+                // Кнопки сохранить
                 Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(10.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Сохранить текущее фото
                     SmallFloatingActionButton(
                         onClick = {
                             savePhotoToGallery(context, photos[pagerState.currentPage])
@@ -146,81 +172,68 @@ private fun RecordContent(record: WorkRecord, modifier: Modifier, context: Conte
                         containerColor = Color.Black.copy(alpha = 0.6f),
                         contentColor = Color.White
                     ) {
-                        Icon(Icons.Default.Download, "Сохранить фото", modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Download, "Сохранить фото", Modifier.size(20.dp))
                     }
-
-                    // Сохранить все фото
                     if (photos.size > 1) {
                         SmallFloatingActionButton(
                             onClick = {
                                 photos.forEach { savePhotoToGallery(context, it) }
-                                Toast.makeText(context, "Все фото сохранены в галерею", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Все фото сохранены", Toast.LENGTH_SHORT).show()
                             },
                             containerColor = Color.Black.copy(alpha = 0.6f),
                             contentColor = Color.White
                         ) {
-                            Icon(Icons.Default.DoneAll, "Сохранить все", modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.DoneAll, "Все фото", Modifier.size(20.dp))
                         }
                     }
                 }
 
-                // Счётчик и точки-индикаторы
+                // Точки-индикаторы
                 if (photos.size > 1) {
-                    Column(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            photos.indices.forEach { index ->
-                                Box(
-                                    modifier = Modifier
-                                        .padding(horizontal = 3.dp)
-                                        .size(if (pagerState.currentPage == index) 8.dp else 6.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (pagerState.currentPage == index) Color.White
-                                            else Color.White.copy(alpha = 0.5f)
-                                        )
-                                )
-                            }
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        photos.indices.forEach { i ->
+                            Box(modifier = Modifier.padding(horizontal = 3.dp)
+                                .size(if (pagerState.currentPage == i) 8.dp else 6.dp)
+                                .clip(CircleShape)
+                                .background(if (pagerState.currentPage == i) Color.White else Color.White.copy(0.5f)))
                         }
                     }
-
-                    // Номер фото
-                    Surface(
-                        modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.Black.copy(alpha = 0.5f)
-                    ) {
-                        Text(
-                            "${pagerState.currentPage + 1} / ${photos.size}",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            color = Color.White, fontSize = 12.sp
-                        )
+                    Surface(modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                        shape = RoundedCornerShape(20.dp), color = Color.Black.copy(0.5f)) {
+                        Text("${pagerState.currentPage + 1}/${photos.size}",
+                            Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            color = Color.White, fontSize = 12.sp)
                     }
+                }
+
+                // Подсказка "нажми для увеличения"
+                Surface(modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+                    shape = RoundedCornerShape(20.dp), color = Color.Black.copy(0.4f)) {
+                    Text("🔍 увеличить",
+                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = Color.White, fontSize = 11.sp)
                 }
             }
         } else {
-            Box(
-                modifier = Modifier.fillMaxWidth().height(160.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) { Text(record.categoryEmoji, fontSize = 64.sp) }
+            Box(modifier = Modifier.fillMaxWidth().height(160.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                Text(record.categoryEmoji.ifBlank { "📋" }, fontSize = 64.sp)
+            }
         }
 
         // ===== ИНФОРМАЦИЯ =====
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             Row(verticalAlignment = Alignment.Top) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = record.workType ?: record.caption,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Medium
-                    )
+                Column(Modifier.weight(1f)) {
+                    Text(record.workType ?: record.caption,
+                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium)
                     if (!record.address.isNullOrBlank()) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                            Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(16.dp), tint = Green700)
+                            Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp), tint = Green700)
                             Spacer(Modifier.width(2.dp))
                             Text(record.address, style = MaterialTheme.typography.bodyLarge, color = Green700)
                         }
@@ -228,29 +241,45 @@ private fun RecordContent(record: WorkRecord, modifier: Modifier, context: Conte
                 }
                 if (record.categoryEmoji.isNotBlank()) {
                     Surface(shape = RoundedCornerShape(8.dp), color = Green100) {
-                        Text(record.categoryEmoji, modifier = Modifier.padding(8.dp), fontSize = 24.sp)
+                        Text(record.categoryEmoji, Modifier.padding(8.dp), fontSize = 24.sp)
                     }
                 }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(16.dp),
+                Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(6.dp))
                 Text(formatDate(record.workDate), style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider()
 
+            // Метаданные
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (record.categoryName.isNotBlank()) {
-                    MetaCard("Категория", record.categoryName, Modifier.weight(1f))
-                }
+                if (record.categoryName.isNotBlank()) MetaCard("Категория", record.categoryName, Modifier.weight(1f))
                 MetaCard("Фотографий", "${record.photos.size} шт.", Modifier.weight(1f))
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // Кастомные поля
+            if (record.customFields.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Дополнительно", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                record.customFields.forEach { field ->
+                    Row(modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(field.fieldName, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.widthIn(min = 80.dp, max = 120.dp))
+                        Text(field.fieldValue, style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+
+            HorizontalDivider()
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Исходная подпись", style = MaterialTheme.typography.labelMedium,
@@ -259,31 +288,129 @@ private fun RecordContent(record: WorkRecord, modifier: Modifier, context: Conte
                     fontStyle = FontStyle.Italic)
             }
 
-            if (!record.description.isNullOrBlank()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Описание", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(record.description, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-
             Spacer(Modifier.height(16.dp))
         }
     }
 }
 
 /**
- * Сохраняет фото из внутреннего хранилища приложения в галерею телефона.
+ * Полноэкранный просмотр фото с зумом пальцами.
  */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FullscreenPhotoViewer(
+    photos: List<String>,
+    startIndex: Int,
+    onDismiss: () -> Unit,
+    context: Context
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            val pagerState = rememberPagerState(initialPage = startIndex) { photos.size }
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                // Состояние зума для каждой страницы
+                var scale by remember { mutableStateOf(1f) }
+                var offsetX by remember { mutableStateOf(0f) }
+                var offsetY by remember { mutableStateOf(0f) }
+
+                AsyncImage(
+                    model = photos[page],
+                    contentDescription = "Фото ${page + 1}",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offsetX,
+                            translationY = offsetY
+                        )
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 5f)
+                                // Смещение только при зуме
+                                if (scale > 1f) {
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                } else {
+                                    offsetX = 0f
+                                    offsetY = 0f
+                                }
+                            }
+                        },
+                    contentScale = ContentScale.Fit
+                )
+            }
+
+            // Кнопка закрыть
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                    .background(Color.Black.copy(0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, "Закрыть", tint = Color.White)
+            }
+
+            // Счётчик фото
+            if (photos.size > 1) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                    shape = RoundedCornerShape(20.dp), color = Color.Black.copy(0.5f)
+                ) {
+                    Text("${pagerState.currentPage + 1} / ${photos.size}",
+                        Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = Color.White, fontSize = 14.sp)
+                }
+            }
+
+            // Кнопка сохранить внизу
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        savePhotoToGallery(context, photos[pagerState.currentPage])
+                        Toast.makeText(context, "Фото сохранено в галерею", Toast.LENGTH_SHORT).show()
+                    },
+                    containerColor = Color.White.copy(0.15f),
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Download, "Сохранить")
+                }
+                if (photos.size > 1) {
+                    FloatingActionButton(
+                        onClick = {
+                            photos.forEach { savePhotoToGallery(context, it) }
+                            Toast.makeText(context, "Все фото сохранены", Toast.LENGTH_SHORT).show()
+                        },
+                        containerColor = Color.White.copy(0.15f),
+                        contentColor = Color.White
+                    ) {
+                        Icon(Icons.Default.DoneAll, "Все фото")
+                    }
+                }
+            }
+        }
+    }
+}
+
 fun savePhotoToGallery(context: Context, filePath: String) {
     try {
         val file = File(filePath)
         if (!file.exists()) return
-
         val filename = "WorkJournal_${System.currentTimeMillis()}.jpg"
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+ — используем MediaStore
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, filename)
                 put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
@@ -296,21 +423,19 @@ fun savePhotoToGallery(context: Context, filePath: String) {
                 }
             }
         } else {
-            // Android 9 и ниже
             val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
             val dir = File(pictures, "WorkJournal").also { it.mkdirs() }
             file.copyTo(File(dir, filename), overwrite = true)
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
+    } catch (e: Exception) { e.printStackTrace() }
 }
 
 @Composable
 private fun MetaCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    Card(modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(8.dp)) {
-        Column(modifier = Modifier.padding(10.dp)) {
+        Column(Modifier.padding(10.dp)) {
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(top = 2.dp))

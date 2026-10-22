@@ -7,11 +7,14 @@ import androidx.room.RoomDatabase
     entities = [
         WorkRecordEntity::class,
         PhotoEntity::class,
-        CategoryEntity::class
+        CategoryEntity::class,
+        CustomFieldEntity::class,
+        FieldTemplateEntity::class
     ],
-    version = 2,           // Увеличиваем версию — добавили таблицу categories
+    version = 3,   // Увеличиваем версию — добавили custom_fields и field_templates
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workJournalDao(): WorkJournalDao
+}
 }
