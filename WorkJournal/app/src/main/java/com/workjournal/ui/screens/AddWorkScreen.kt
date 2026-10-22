@@ -37,7 +37,8 @@ import com.workjournal.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class,
+    ExperimentalLayoutApi::class)
 @Composable
 fun AddWorkScreen(
     onSaved: () -> Unit,
@@ -47,7 +48,6 @@ fun AddWorkScreen(
     val state = viewModel.uiState.collectAsState().value
     val context = LocalContext.current
 
-    // Диалоги
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var showAddFieldDialog by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
@@ -74,31 +74,24 @@ fun AddWorkScreen(
         } else cameraPermission.launchPermissionRequest()
     }
 
-    // ===== ДИАЛОГ: Добавить категорию =====
+    // Диалог: Добавить категорию
     if (showAddCategoryDialog) {
         Dialog(onDismissRequest = { showAddCategoryDialog = false }) {
             Card(shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Новая категория", fontWeight = FontWeight.Medium, fontSize = 18.sp)
                     OutlinedTextField(
-                        value = newCategoryName,
-                        onValueChange = { newCategoryName = it },
-                        label = { Text("Название") },
-                        placeholder = { Text("Например: 🛝 Качели") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        value = newCategoryName, onValueChange = { newCategoryName = it },
+                        label = { Text("Название") }, placeholder = { Text("Например: 🛝 Качели") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { showAddCategoryDialog = false }, Modifier.weight(1f)) {
-                            Text("Отмена")
-                        }
+                        OutlinedButton(onClick = { showAddCategoryDialog = false }, Modifier.weight(1f)) { Text("Отмена") }
                         Button(
                             onClick = {
                                 if (newCategoryName.isNotBlank()) {
                                     viewModel.addNewCategory(newCategoryName)
-                                    newCategoryName = ""
-                                    showAddCategoryDialog = false
+                                    newCategoryName = ""; showAddCategoryDialog = false
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Green700),
@@ -110,53 +103,37 @@ fun AddWorkScreen(
         }
     }
 
-    // ===== ДИАЛОГ: Добавить поле =====
+    // Диалог: Добавить поле
     if (showAddFieldDialog) {
         Dialog(onDismissRequest = { showAddFieldDialog = false }) {
             Card(shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Новое поле", fontWeight = FontWeight.Medium, fontSize = 18.sp)
-                    Text("Введите название поля которое хотите добавить:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    // Быстрый выбор из часто используемых
                     if (state.fieldTemplates.isNotEmpty()) {
                         Text("Часто используемые:", style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         state.fieldTemplates.take(5).forEach { template ->
                             OutlinedButton(
-                                onClick = {
-                                    viewModel.addCustomField(template.fieldName)
-                                    showAddFieldDialog = false
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
+                                onClick = { viewModel.addCustomField(template.fieldName); showAddFieldDialog = false },
+                                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Text(template.fieldName, modifier = Modifier.weight(1f))
-                            }
+                            ) { Text(template.fieldName, modifier = Modifier.weight(1f)) }
                         }
                         HorizontalDivider()
                     }
                     OutlinedTextField(
-                        value = newFieldName,
-                        onValueChange = { newFieldName = it },
+                        value = newFieldName, onValueChange = { newFieldName = it },
                         label = { Text("Название поля") },
                         placeholder = { Text("ID площадки, Адрес, Улица...") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { showAddFieldDialog = false }, Modifier.weight(1f)) {
-                            Text("Отмена")
-                        }
+                        OutlinedButton(onClick = { showAddFieldDialog = false }, Modifier.weight(1f)) { Text("Отмена") }
                         Button(
                             onClick = {
                                 if (newFieldName.isNotBlank()) {
                                     viewModel.addCustomField(newFieldName)
-                                    newFieldName = ""
-                                    showAddFieldDialog = false
+                                    newFieldName = ""; showAddFieldDialog = false
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Green700),
@@ -168,7 +145,7 @@ fun AddWorkScreen(
         }
     }
 
-    // ===== ДИАЛОГ: Подтверждение при неполных данных =====
+    // Диалог: Подтверждение при неполных данных
     if (state.showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.cancelSave() },
@@ -179,21 +156,17 @@ fun AddWorkScreen(
                     Spacer(Modifier.height(8.dp))
                     state.missingFields.forEach { field ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("• ", color = MaterialTheme.colorScheme.error)
-                            Text(field)
+                            Text("• ", color = MaterialTheme.colorScheme.error); Text(field)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text("Сохранить всё равно?",
-                        style = MaterialTheme.typography.bodyMedium,
+                    Text("Сохранить всё равно?", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = { viewModel.confirmSave() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Green700)
-                ) { Text("Да, сохранить") }
+                Button(onClick = { viewModel.confirmSave() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Green700)) { Text("Да, сохранить") }
             },
             dismissButton = {
                 OutlinedButton(onClick = { viewModel.cancelSave() }) { Text("Вернуться") }
@@ -205,13 +178,9 @@ fun AddWorkScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Новая работа", fontWeight = FontWeight.Medium) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Назад") }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Назад") } },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Green900, titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
-                )
+                    containerColor = Green900, titleContentColor = Color.White, navigationIconContentColor = Color.White)
             )
         }
     ) { padding ->
@@ -220,8 +189,7 @@ fun AddWorkScreen(
                 .verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-
-            // ---- ФОТО ----
+            // ФОТО
             SectionLabel("Фотографии")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { openCamera() }, Modifier.weight(1f), shape = RoundedCornerShape(10.dp)) {
@@ -249,40 +217,42 @@ fun AddWorkScreen(
                 }
             }
 
-            // ---- КАТЕГОРИЯ ----
+            // КАТЕГОРИЯ
             SectionLabel("Категория")
             if (state.availableCategories.isEmpty()) {
                 OutlinedButton(onClick = { showAddCategoryDialog = true }, shape = RoundedCornerShape(10.dp)) {
-                    Icon(Icons.Default.Add, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp)); Text("Добавить категорию")
+                    Icon(Icons.Default.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Добавить категорию")
                 }
             } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    state.availableCategories.forEach { cat ->
-                        FilterChip(
-                            selected = cat.id == state.selectedCategory?.id,
-                            onClick = { viewModel.onCategorySelected(cat) },
-                            label = { Text(cat.name, fontSize = 13.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Green100, selectedLabelColor = Green800)
-                        )
+                // Используем Column + Row вместо FlowRow
+                val rows = (state.availableCategories.map { it as WorkCategory? } + null).chunked(3)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    rows.forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.forEach { cat ->
+                                if (cat == null) {
+                                    InputChip(selected = false, onClick = { showAddCategoryDialog = true },
+                                        label = { Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+                                        shape = RoundedCornerShape(20.dp))
+                                } else {
+                                    FilterChip(
+                                        selected = cat.id == state.selectedCategory?.id,
+                                        onClick = { viewModel.onCategorySelected(cat) },
+                                        label = { Text(cat.name, fontSize = 13.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Green100, selectedLabelColor = Green800)
+                                    )
+                                }
+                            }
+                        }
                     }
-                    // Кнопка + всегда в конце
-                    InputChip(
-                        selected = false,
-                        onClick = { showAddCategoryDialog = true },
-                        label = { Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
-                        shape = RoundedCornerShape(20.dp)
-                    )
                 }
             }
 
-            // ---- ПОДПИСЬ ----
+            // ПОДПИСЬ
             SectionLabel("Подпись")
             OutlinedTextField(
-                value = state.caption,
-                onValueChange = { viewModel.onCaptionChanged(it) },
+                value = state.caption, onValueChange = { viewModel.onCaptionChanged(it) },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("Замена качели, Тевосяна 22а — поменяли сиденье",
                     color = MaterialTheme.colorScheme.onSurfaceVariant) },
@@ -300,41 +270,29 @@ fun AddWorkScreen(
                 }
             }
 
-            // ---- КАСТОМНЫЕ ПОЛЯ ----
+            // КАСТОМНЫЕ ПОЛЯ
             if (state.customFields.isNotEmpty()) {
                 SectionLabel("Дополнительные поля")
                 state.customFields.forEachIndexed { index, field ->
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
-                            value = field.fieldValue,
-                            onValueChange = { viewModel.updateCustomField(index, it) },
-                            label = { Text(field.fieldName) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            shape = RoundedCornerShape(10.dp)
+                            value = field.fieldValue, onValueChange = { viewModel.updateCustomField(index, it) },
+                            label = { Text(field.fieldName) }, modifier = Modifier.weight(1f),
+                            singleLine = true, shape = RoundedCornerShape(10.dp)
                         )
-                        IconButton(onClick = { viewModel.removeCustomField(index) },
-                            modifier = Modifier.size(40.dp)) {
-                            Icon(Icons.Default.Close, "Удалить поле",
-                                tint = MaterialTheme.colorScheme.error)
+                        IconButton(onClick = { viewModel.removeCustomField(index) }, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Default.Close, "Удалить поле", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
             }
-
-            // Кнопка добавить поле
-            OutlinedButton(
-                onClick = { showAddFieldDialog = true },
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Add, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
+            OutlinedButton(onClick = { showAddFieldDialog = true }, shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
                 Text("Добавить поле (ID, Адрес, Улица...)")
             }
 
-            // ---- ДАТА ----
+            // ДАТА
             SectionLabel("Дата")
             val cal = Calendar.getInstance().apply { timeInMillis = state.selectedDate }
             val dateFmt = SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
@@ -346,15 +304,13 @@ fun AddWorkScreen(
                 },
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
             ) {
-                Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
+                Icon(Icons.Default.CalendarToday, null, Modifier.size(16.dp)); Spacer(Modifier.width(8.dp))
                 Text(dateFmt.format(Date(state.selectedDate)), fontSize = 15.sp)
             }
 
-            // ---- СОХРАНИТЬ ----
+            // СОХРАНИТЬ
             Button(
-                onClick = { viewModel.trySave() },
-                modifier = Modifier.fillMaxWidth(),
+                onClick = { viewModel.trySave() }, modifier = Modifier.fillMaxWidth(),
                 enabled = !state.isSaving && state.caption.isNotBlank(),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Green700),

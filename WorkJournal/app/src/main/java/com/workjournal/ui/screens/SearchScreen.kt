@@ -31,6 +31,9 @@ fun SearchScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    // Безопасное получение названия поля
+    val customFieldName = (state.searchMode as? SearchMode.CUSTOM_FIELD)?.fieldName ?: ""
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -51,52 +54,67 @@ fun SearchScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
 
-            // Выбор режима поиска
+            // Чипы выбора режима поиска
             item {
                 Text("Искать по:", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(6.dp))
-                // Чипы режимов
-                val modes = listOf(
+
+                val standardModes = listOf(
                     "Везде" to SearchMode.ALL,
                     "Подпись" to SearchMode.CAPTION,
                     "Категория" to SearchMode.CATEGORY,
                     "Дата" to SearchMode.DATE
-                ) + state.customFieldNames.map { it to SearchMode.CUSTOM_FIELD(it) }
+                )
 
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    modes.forEach { (label, mode) ->
-                        FilterChip(
-                            selected = state.searchMode == mode,
-                            onClick = { viewModel.onModeChanged(mode) },
-                            label = { Text(label, fontSize = 13.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Green100,
-                                selectedLabelColor = Green800
+                // Стандартные режимы — первая строка
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        standardModes.forEach { (label, mode) ->
+                            FilterChip(
+                                selected = state.searchMode == mode,
+                                onClick = { viewModel.onModeChanged(mode) },
+                                label = { Text(label, fontSize = 13.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Green100, selectedLabelColor = Green800)
                             )
-                        )
+                        }
+                    }
+                    // Кастомные поля — отдельная строка если есть
+                    if (state.customFieldNames.isNotEmpty()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            state.customFieldNames.forEach { fieldName ->
+                                val mode = SearchMode.CUSTOM_FIELD(fieldName)
+                                FilterChip(
+                                    selected = state.searchMode == mode,
+                                    onClick = { viewModel.onModeChanged(mode) },
+                                    label = { Text(fieldName, fontSize = 13.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Green100, selectedLabelColor = Green800)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Поле поиска
+            // Поле ввода запроса
             item {
+                val placeholder = when (state.searchMode) {
+                    SearchMode.ALL -> "Ищет по всем полям..."
+                    SearchMode.CAPTION -> "Текст подписи..."
+                    SearchMode.CATEGORY -> "Название категории..."
+                    SearchMode.DATE -> "Например: октябрь 2026"
+                    is SearchMode.CUSTOM_FIELD -> "Значение поля «$customFieldName»..."
+                }
+
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = state.query,
                         onValueChange = { viewModel.onQueryChanged(it) },
                         modifier = Modifier.weight(1f),
-                        placeholder = {
-                            Text(when (state.searchMode) {
-                                SearchMode.ALL -> "Ищет по всем полям..."
-                                SearchMode.CAPTION -> "Текст подписи..."
-                                SearchMode.CATEGORY -> "Название категории..."
-                                SearchMode.DATE -> "Например: октябрь 2026"
-                                is SearchMode.CUSTOM_FIELD -> "Значение поля «${state.searchMode.fieldName}»..."
-                            }, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        },
+                        placeholder = { Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
@@ -111,7 +129,7 @@ fun SearchScreen(
                 }
             }
 
-            // Результаты
+            // Загрузка
             if (state.isSearching) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) {
@@ -119,6 +137,7 @@ fun SearchScreen(
                     }
                 }
             } else if (state.hasSearched) {
+                // Результат
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = Green100),
                         shape = RoundedCornerShape(10.dp)) {
@@ -138,8 +157,7 @@ fun SearchScreen(
                         listOf("Тевосяна", "Замена качели", "октябрь").forEach { ex ->
                             OutlinedButton(
                                 onClick = { viewModel.onQueryChanged(ex); viewModel.search() },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Text(ex, modifier = Modifier.weight(1f),
