@@ -29,31 +29,25 @@ fun CategoriesScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // Диалог добавления категории
+    // Диалог добавления
     if (state.showAddDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.hideAddDialog() },
             title = { Text("Новая категория") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = state.newEmoji,
-                        onValueChange = { viewModel.onEmojiChanged(it) },
-                        label = { Text("Эмодзи (необязательно)") },
-                        placeholder = { Text("🔧") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = state.newName,
                         onValueChange = { viewModel.onNameChanged(it) },
-                        label = { Text("Название *") },
-                        placeholder = { Text("Например: Покраска заборов") },
+                        label = { Text("Название") },
+                        placeholder = { Text("Например: 🛝 Качели") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         isError = state.error != null
                     )
-                    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+                    state.error?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    }
                 }
             },
             confirmButton = {
@@ -68,13 +62,89 @@ fun CategoriesScreen(
         )
     }
 
+    // Диалог умного удаления — категория содержит работы
+    val deleteAction = state.deleteAction
+    if (deleteAction is CategoriesViewModel.DeleteAction.WithRecords) {
+        var selectedTarget by remember { mutableStateOf<WorkCategory?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteDialog() },
+            title = { Text("Категория «${deleteAction.category.name}» содержит работы") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "В этой категории ${deleteAction.records.size} " +
+                        if (deleteAction.records.size == 1) "запись" else "записей" + ".",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Что сделать с этими записями?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    // Выбор: перенести в другую категорию
+                    if (deleteAction.otherCategories.isNotEmpty()) {
+                        Text(
+                            "Перенести в категорию:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        deleteAction.otherCategories.forEach { cat ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                RadioButton(
+                                    selected = selectedTarget?.id == cat.id,
+                                    onClick = { selectedTarget = cat }
+                                )
+                                Text(cat.name, modifier = Modifier.padding(start = 4.dp))
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Кнопка перенести (активна только если выбрана целевая категория)
+                    if (deleteAction.otherCategories.isNotEmpty()) {
+                        Button(
+                            onClick = {
+                                selectedTarget?.let { viewModel.moveRecordsToCategory(it) }
+                            },
+                            enabled = selectedTarget != null,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Green700)
+                        ) { Text("Перенести и удалить категорию") }
+                    }
+                    // Кнопка удалить всё
+                    OutlinedButton(
+                        onClick = { viewModel.deleteCategoryWithRecords() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) { Text("Удалить категорию и все записи") }
+                    // Отмена
+                    TextButton(
+                        onClick = { viewModel.dismissDeleteDialog() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Отмена") }
+                }
+            },
+            dismissButton = {}
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Категории", fontWeight = FontWeight.Medium) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.Default.ArrowBack, "Назад")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -89,7 +159,7 @@ fun CategoriesScreen(
                 onClick = { viewModel.showAddDialog() },
                 containerColor = Green700
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить", tint = Color.White)
+                Icon(Icons.Default.Add, "Добавить", tint = Color.White)
             }
         }
     ) { padding ->
@@ -98,16 +168,33 @@ fun CategoriesScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            item {
-                Text(
-                    "Встроенные категории нельзя удалить. Свои — можно.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
-            items(state.categories, key = { it.id }) { cat ->
-                CategoryRow(cat = cat, onDelete = { viewModel.deleteCategory(cat) })
+            if (state.categories.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("🗂️", fontSize = 48.sp)
+                        Text(
+                            "Категорий пока нет",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Нажмите + чтобы добавить первую категорию",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                items(state.categories, key = { it.id }) { cat ->
+                    CategoryRow(
+                        cat = cat,
+                        onDelete = { viewModel.requestDelete(cat) }
+                    )
+                }
             }
         }
     }
@@ -124,15 +211,12 @@ private fun CategoryRow(cat: WorkCategory, onDelete: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(cat.emoji, fontSize = 24.sp)
-            Spacer(Modifier.width(12.dp))
             Text(cat.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            if (cat.isDefault) {
-                Text("встроенная", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.error)
-                }
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Default.Delete, "Удалить",
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
